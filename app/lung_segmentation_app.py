@@ -16,7 +16,7 @@ def dice_coef(y_true, y_pred, smooth=1):
 # Load the model (compile=False to avoid loss config issues)
 @st.cache_resource
 def load_unet_model():
-    model_path = "C:/Users/Lenovo/Lung Segmentation/models/lung_segmentation_unet.h5"  # Change this to your actual model path
+    model_path = "../models/lung_segmentation_unet.h5"  # Change this to your actual model path
     return load_model(model_path, custom_objects={'dice_coef': dice_coef}, compile=False)
 
 # Preprocess image to fit model input
