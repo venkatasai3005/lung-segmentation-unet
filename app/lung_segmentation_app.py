@@ -1,60 +1,40 @@
 import streamlit as st
 import numpy as np
-import cv2
-import tensorflow as tf
-from tensorflow.keras.models import load_model
-from tensorflow.keras import backend as K
 from PIL import Image
+from tensorflow.keras.models import load_model
+import cv2
 
-# Custom Dice coefficient function
-def dice_coef(y_true, y_pred, smooth=1):
-    y_true_f = K.flatten(y_true)
-    y_pred_f = K.flatten(y_pred)
-    intersection = K.sum(y_true_f * y_pred_f)
-    return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
-
-# Load the model (compile=False to avoid loss config issues)
+# Load the UNet model
 @st.cache_resource
 def load_unet_model():
-    model_path = "../models/lung_segmentation_unet.h5"  # Change this to your actual model path
-    return load_model(model_path, custom_objects={'dice_coef': dice_coef}, compile=False)
+    return load_model("lung_segmentation_unet.h5", compile=False)
 
-# Preprocess image to fit model input
-def preprocess_image(image, target_size=(256, 256)):
-    image = image.resize(target_size)
-    image = image.convert("L")  # Convert to grayscale for model input
-    img_array = np.array(image)
-    img_array = img_array.astype('float32') / 255.0
-    img_array = np.expand_dims(img_array, axis=-1)  # shape: (256, 256, 1)
-    img_array = np.expand_dims(img_array, axis=0)   # shape: (1, 256, 256, 1)
-    return img_array
+# Preprocess uploaded image
+def preprocess_image(uploaded_file):
+    image = Image.open(uploaded_file).convert("L")  # Convert to grayscale
+    image = image.resize((256, 256))                # Resize to model input size
+    img_array = np.array(image) / 255.0             # Normalize
+    return img_array.reshape(1, 256, 256, 1)         # Add batch and channel dimensions
 
-
-# Postprocess predicted mask to display
-def postprocess_mask(mask):
-    mask = mask[0, :, :, 0]  # remove batch & channel
-    mask = (mask > 0.5).astype(np.uint8) * 255
-    return mask
+# Load model
+model = load_unet_model()
 
 # Streamlit UI
-st.title("Lung Segmentation App 🫁")
-st.markdown("Upload a chest X-ray or CT image to segment the lungs.")
+st.title("🫁 Lung Segmentation App")
+st.write("Upload a chest X-ray image to get the segmented lung mask using UNet.")
 
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("Upload a Chest X-ray", type=["png", "jpg", "jpeg"])
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption='Uploaded Image', use_column_width=True)
+if uploaded_file:
+    # Show uploaded image
+    st.image(uploaded_file, caption="Uploaded X-ray", use_column_width=True)
 
-    with st.spinner('Segmenting lungs...'):
-        model = load_unet_model()
-        preprocessed = preprocess_image(image)
-        prediction = model.predict(preprocessed)
-        mask = postprocess_mask(prediction)
+    # Preprocess and predict
+    preprocessed = preprocess_image(uploaded_file)
+    prediction = model.predict(preprocessed)[0, :, :, 0]  # Remove batch and channel dims
 
-        # Overlay mask on original image
-        overlay = np.array(image.resize((256, 256)))
-        mask_3ch = np.stack([mask]*3, axis=-1)
-        result = cv2.addWeighted(overlay, 0.7, mask_3ch, 0.3, 0)
+    # Postprocess mask (optional thresholding)
+    binary_mask = (prediction > 0.5).astype(np.uint8) * 255
 
-        st.image(result, caption="Segmented Output", use_column_width=True)
+    # Show prediction
+    st.image(binary_mask, caption="Predicted Lung Mask", use_column_width=True, clamp=True)
