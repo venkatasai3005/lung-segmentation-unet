@@ -1,7 +1,5 @@
 .ipynb_checkpoints/
-*.h5
-*.keras
-dataset/
-preprocessed/
-output/
 __pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
